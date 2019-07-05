@@ -32,7 +32,7 @@ float3 random3 (float3 array)
     );
 }
 
-float perlin (float2 size, float2 n, float2 uv)
+float perlin (float2 size, int2 n, float2 uv)
 {
     uv = frac(uv / size) * n;
     float2 p00 = floor(uv);
@@ -53,7 +53,7 @@ float perlin (float2 size, float2 n, float2 uv)
     );
 }
 
-float perlin (float3 size, float3 n, float3 pos)
+float perlin (float3 size, int3 n, float3 pos)
 {
     pos = frac(pos / size) * n;
     float3 p000 = floor(pos);
@@ -97,12 +97,12 @@ float square (float l, float r, float x)
 
 float3 zinv (float3 v)
 {
-    return float3(v.xy, - v.z);
+    return float3(v.xy, -v.z);
 }
 
 float4 zinv (float4 v)
 {
-    return float4(v.xy, - v.z, v.w);
+    return float4(v.xy, -v.z, v.w);
 }
 
 float3x3 rotation_tri (float3 axis, float cos_, float sin_)

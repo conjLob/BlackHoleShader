@@ -33,21 +33,28 @@
                 float4 vertex : POSITION;
             };
 
-            struct v2f
+            struct vertout
             {
-                float3 raypos : POSITION1;
+                float3 ray_pos : POSITION1;
                 float4 vertex : SV_POSITION;
             };
 
-            sampler2D _RedShiftTex;
-
-            v2f vert (appdata v)
+            struct fragin
             {
-                v2f o;
+                float3 ray_pos : POSITION1;
+                UNITY_VPOS_TYPE vpos : VPOS;
+            };
+
+            sampler2D _RedShiftTex;
+            sampler3D _DitherMaskLOD;
+
+            vertout vert (appdata v)
+            {
+                vertout o;
                 float3 obj = UNITY_MATRIX_T_MV[3].xyz;
                 o.vertex = float4(obj + RING_SCALE / 5.0 * 1.5 * float3(v.vertex.xz, 0), 1);
 
-                o.raypos = zinv(mul(o.vertex, UNITY_MATRIX_IT_MV).xyz);
+                o.ray_pos = zinv(mul(o.vertex, UNITY_MATRIX_IT_MV).xyz);
                 o.vertex = mul(UNITY_MATRIX_P, o.vertex);
                 return o;
             }
@@ -152,12 +159,14 @@
                 return ret;
             }
 
-            fixed4 frag (v2f input) : SV_Target
+            fixed4 frag (fragin input) : SV_Target
             {
                 fixed4 color = 0;
 
+                float2 dither_uv = frac(input.vpos.xy / 4.0);
+
                 float3 obs3 = zinv(mul(unity_WorldToObject, _WorldSpaceCameraPos));
-                float3 u03_obs = c * normalize(input.raypos - obs3);
+                float3 u03_obs = c * normalize(input.ray_pos - obs3);
 
                 float3x3 rot = calc_rotation(obs3, u03_obs);
                 float2 obs = mul(rot, obs3).xy;
@@ -177,11 +186,12 @@
 
                 r_ur drur;
                 w_phi dwphi;
-                float phi_shift, diff_phi, diff_phi_prev;
+                float phi_shift = 0.5 * PI * step(eyphi, 0.5 * PI);
+                float diff_phi, diff_phi_prev;
                 float r_lerp, r_prev;
                 w_phi wphi_lerp, wphi_prev;
                 float s;
-                float2 uv;
+                float2 ring_pos;
 
                 w_phi dwphi_prev1, dwphi_prev2;
                 init_integral(c0, omega0, rur, dwphi_prev1);
@@ -196,7 +206,6 @@
                     dwphi = simpson(n, c0, omega0, rur, wphi, dwphi_prev1, dwphi_prev2);
                     wphi += dwphi;
 
-                    phi_shift = 0.5 * PI * step(eyphi, 0.5 * PI);
                     diff_phi_prev = fmod(wphi_prev[phi_] + phi_shift, PI) - phi_shift - eyphi;
                     diff_phi = diff_phi_prev + dwphi[phi_];
                     s = - diff_phi_prev / dwphi[phi_];
@@ -204,12 +213,15 @@
                     wphi_lerp = wphi_prev + dwphi * s;
 
                     //uv = (1.0 / RING_SCALE) * r_lerp * zinv(mul(float3(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_]), 0), rot)).xz + 0.5;
-                    uv = mul(float3(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_]), 0), rot).xz;
                     color = tex2Dlod(_RedShiftTex, float4(3 * a / r_lerp, a / r0, 0, 0));
-                    color.w = perlin(float2(3, 2 * PI), float2(5, 3), float2(r_lerp - 3 * a, atan2(uv.y, uv.x) + PI + _Time.z)) * 2 + 0.8;
-                    color.w = color.w > 0.5;
+                    ring_pos = mul(float3(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_]), 0), rot).xz;
+                    color.w = saturate(perlin(float2(3, 2 * PI), int2(5, 3), float2(r_lerp - 3 * a, atan2(ring_pos.y, ring_pos.x) + PI + _Time.z)) * 2 + 0.8);
+                    color.w = tex3Dlod(_DitherMaskLOD, float4(dither_uv, 15.0 / 16.0 * color.w, 0)).w;
 
-                    decided = diff_phi * diff_phi_prev < 0 && 3 * a < r_lerp && r_lerp < RING_SCALE && color.w;
+                    decided =
+                        diff_phi * diff_phi_prev < 0 && 3 * a < r_lerp &&
+                        r_lerp < RING_SCALE &&
+                        color.w;
                     color *= decided;
 
                     frag = rur[r_] < a;
@@ -223,7 +235,7 @@
                     decided = decided || rur[ur_] / rtg00r0 > ESCAPE_VELOCITY * c;
                 }
                 color.w = rur[r_] < 1.5 * a ? 1 : color.w;
-                clip(color.w - 0.1);
+                clip(color.w - 0.5);
                 return color;
             }
             ENDCG
