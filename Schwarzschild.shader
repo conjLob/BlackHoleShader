@@ -154,6 +154,8 @@
 
             fixed4 frag (v2f input) : SV_Target
             {
+                fixed4 color = 0;
+
                 float3 obs3 = zinv(mul(unity_WorldToObject, _WorldSpaceCameraPos));
                 float3 u03_obs = c * normalize(input.raypos - obs3);
 
@@ -170,10 +172,8 @@
                 init(obs, u0_obs, c0, omega0, wphi[w_], rur[r_], rur[ur_], wphi[phi_], rtg00r0);
                 float r0 = rur[r_];
 
-                bool color_decided = false;
-                bool4 color_decideds = false;
-                fixed4 ring_color;
-                int decided = 0;
+                bool frag;
+                bool decided = false;
 
                 r_ur drur;
                 w_phi dwphi;
@@ -182,11 +182,10 @@
                 w_phi wphi_lerp, wphi_prev;
                 float s;
                 float2 uv;
-                float3 pos;
 
                 w_phi dwphi_prev1, dwphi_prev2;
                 init_integral(c0, omega0, rur, dwphi_prev1);
-                for (int n = 1; n <= N & ! color_decided; n++) {
+                for (int n = 1; n <= N & ! decided; n++) {
                     r_prev = rur[r_];
                     wphi_prev = wphi;
 
@@ -200,49 +199,32 @@
                     phi_shift = 0.5 * PI * step(eyphi, 0.5 * PI);
                     diff_phi_prev = fmod(wphi_prev[phi_] + phi_shift, PI) - phi_shift - eyphi;
                     diff_phi = diff_phi_prev + dwphi[phi_];
+                    s = - diff_phi_prev / dwphi[phi_];
+                    r_lerp = r_prev + drur[r_] * s;
+                    wphi_lerp = wphi_prev + dwphi * s;
 
-                    if (diff_phi * diff_phi_prev < 0) {
-                        s = - diff_phi_prev / dwphi[phi_];
-                        r_lerp = r_prev + drur[r_] * s;
-                        wphi_lerp = wphi_prev + dwphi * s;
+                    //uv = (1.0 / RING_SCALE) * r_lerp * zinv(mul(float3(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_]), 0), rot)).xz + 0.5;
+                    uv = mul(float3(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_]), 0), rot).xz;
+                    color = tex2Dlod(_RedShiftTex, float4(3 * a / r_lerp, a / r0, 0, 0));
+                    color.w = perlin(float2(3, 2 * PI), float2(5, 3), float2(r_lerp - 3 * a, atan2(uv.y, uv.x) + PI + _Time.z)) * 2 + 0.8;
+                    color.w = color.w > 0.5;
 
-                        uv = mul(float3(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_]), 0), rot).xz;
-                        ring_color = tex2Dlod(_RedShiftTex, float4(3 * a / r_lerp, a / r0, 0, 0));
-                        ring_color.w = perlin(float2(3, 2 * PI), float2(5, 3), float2(r_lerp - 3 * a, atan2(uv.y, uv.x) + PI + _Time.z)) * 2 + 0.8;
-                        color_decideds[0] = 3 * a < r_lerp & r_lerp < RING_SCALE;
-                    }
+                    decided = diff_phi * diff_phi_prev < 0 && 3 * a < r_lerp && r_lerp < RING_SCALE && color.w;
+                    color *= decided;
 
-                    color_decideds[1] = rur[r_] < a;
-                    color_decideds[2] = rur[ur_] / rtg00r0 > ESCAPE_VELOCITY * c;
-                    color_decideds[3] = wphi[phi_] > 2 * PI * MAX_WINDING;
+                    frag = rur[r_] < a;
+                    color.w = frag ? 1 : color.w;
+                    decided = decided || frag;
 
-                    color_decided = any(color_decideds);
+                    frag = wphi[phi_] > 2 * PI * MAX_WINDING;
+                    color.w = frag ? 1 : color.w;
+                    decided = decided || frag;
+
+                    decided = decided || rur[ur_] / rtg00r0 > ESCAPE_VELOCITY * c;
                 }
-                int color_idx;
-                if (color_decided) {
-                    for (int i = 0; i < 3; i++) {
-                        if (color_decideds[i]) {
-                            color_idx = i;
-                            break;
-                        }
-                    }
-                    switch (color_idx) {
-                        case 0:
-                            return ring_color;
-                        case 1:
-                            return fixed4(0, 0, 0, 1);
-                        case 2:
-                            discard;
-                            return 0;
-                        case 3:
-                            return fixed4(0, 0, 0, 1);
-                    }
-                }
-                if (rur[r_] < 1.5 * a) {
-                    return fixed4(0, 0, 0, 1);
-                }
-                discard;
-                return 0;
+                color.w = rur[r_] < 1.5 * a ? 1 : color.w;
+                clip(color.w - 0.1);
+                return color;
             }
             ENDCG
         }
