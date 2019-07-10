@@ -95,6 +95,11 @@ float square (float l, float r, float x)
     return step(l, x) * step(x, r);
 }
 
+float3 f4to3 (float4 v)
+{
+    return v.xyz / v.w;
+}
+
 float3 zinv (float3 v)
 {
     return float3(v.xy, -v.z);
@@ -104,6 +109,19 @@ float4 zinv (float4 v)
 {
     return float4(v.xy, -v.z, v.w);
 }
+
+#define ZINV_MATRIX float3( \
+    1,  0,  0, \
+    0,  1,  0, \
+    0,  0, -1, \
+)
+
+#define ZINV_MATRIX4 float3( \
+    1,  0,  0,  0, \
+    0,  1,  0,  0, \
+    0,  0, -1,  0, \
+    0,  0,  0,  1, \
+)
 
 float3x3 rotation_tri (float3 axis, float cos_, float sin_)
 {
@@ -161,6 +179,22 @@ float4x4 rotation4 (float3 theta)
 {
     float angle = length(theta);
     return rotation4_tri(theta / angle, cos(angle), sin(angle));
+}
+
+float clip2depth (float4 clip_pos)
+{
+    #if UNITY_UV_STARTS_AT_TOP
+        return clip_pos.z / clip_pos.w;
+    #else
+        return clip_pos.z / clip_pos.w * 0.5 + 0.5;
+    #endif
+}
+
+sampler3D _DitherMaskLOD;
+
+float dither (float2 uv, float alpha)
+{
+    return tex3Dlod(_DitherMaskLOD, float4(frac(uv / 4.0), 15.0 / 16.0 * alpha, 0)).a;
 }
 
 #endif

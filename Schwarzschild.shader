@@ -7,8 +7,9 @@
     }
     SubShader
     {
-        Tags { "RenderType"="Transparent" }
-        Blend SrcAlpha OneMinusSrcAlpha
+        Tags { "RenderType"="Queue" }
+        //Blend SrcAlpha OneMinusSrcAlpha
+        //Cull Off
         LOD 100
 
         Pass
@@ -45,8 +46,13 @@
                 UNITY_VPOS_TYPE vpos : VPOS;
             };
 
+            struct fragout
+            {
+                float4 color : SV_Target;
+                float depth : SV_Depth;
+            };
+
             sampler2D _RedShiftTex;
-            sampler3D _DitherMaskLOD;
 
             vertout vert (appdata v)
             {
@@ -159,14 +165,14 @@
                 return ret;
             }
 
-            fixed4 frag (fragin input) : SV_Target
+            fragout frag (fragin i)
             {
-                fixed4 color = 0;
-
-                float2 dither_uv = frac(input.vpos.xy / 4.0);
+                fragout o;
+                o.color = 0;
+                o.depth = 1;
 
                 float3 obs3 = zinv(mul(unity_WorldToObject, _WorldSpaceCameraPos));
-                float3 u03_obs = c * normalize(input.ray_pos - obs3);
+                float3 u03_obs = c * normalize(i.ray_pos - obs3);
 
                 float3x3 rot = calc_rotation(obs3, u03_obs);
                 float2 obs = mul(rot, obs3).xy;
@@ -181,8 +187,9 @@
                 init(obs, u0_obs, c0, omega0, wphi[w_], rur[r_], rur[ur_], wphi[phi_], rtg00r0);
                 float r0 = rur[r_];
 
-                bool frag;
+                bool flag;
                 bool decided = false;
+                float max_depth = 0;
 
                 r_ur drur;
                 w_phi dwphi;
@@ -191,7 +198,7 @@
                 float r_lerp, r_prev;
                 w_phi wphi_lerp, wphi_prev;
                 float s;
-                float2 ring_pos;
+                float3 ring_pos;
 
                 w_phi dwphi_prev1, dwphi_prev2;
                 init_integral(c0, omega0, rur, dwphi_prev1);
@@ -212,31 +219,38 @@
                     r_lerp = r_prev + drur[r_] * s;
                     wphi_lerp = wphi_prev + dwphi * s;
 
-                    //uv = (1.0 / RING_SCALE) * r_lerp * zinv(mul(float3(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_]), 0), rot)).xz + 0.5;
-                    color = tex2Dlod(_RedShiftTex, float4(3 * a / r_lerp, a / r0, 0, 0));
-                    ring_pos = mul(float3(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_]), 0), rot).xz;
-                    color.w = saturate(perlin(float2(3, 2 * PI), int2(5, 3), float2(r_lerp - 3 * a, atan2(ring_pos.y, ring_pos.x) + PI + _Time.z)) * 2 + 0.8);
-                    color.w = tex3Dlod(_DitherMaskLOD, float4(dither_uv, 15.0 / 16.0 * color.w, 0)).w;
+                    ring_pos = r_lerp * zinv(mul(float3(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_]), 0), rot));
+                    o.color = tex2Dlod(_RedShiftTex, float4(3 * a / r_lerp, a / r0, 0, 0));
+                    o.color.w = saturate(perlin(float2(3, 2 * PI), int2(5, 3), float2(r_lerp - 3 * a, atan2(ring_pos.x, ring_pos.z) + PI + _Time.z)) * 2 + 0.8);
+                    o.color.w = dither(i.vpos.xy, o.color.w);
+                    o.depth = max(clip2depth(UnityObjectToClipPos(ring_pos)), max_depth);
 
                     decided =
                         diff_phi * diff_phi_prev < 0 && 3 * a < r_lerp &&
                         r_lerp < RING_SCALE &&
-                        color.w;
-                    color *= decided;
+                        o.color.w;
+                    o.color *= decided;
+                    o.depth = decided ? o.depth : 1;
 
-                    frag = rur[r_] < a;
-                    color.w = frag ? 1 : color.w;
-                    decided = decided || frag;
+                    s = (a - r_prev) / drur[r_];
+                    r_lerp = r_prev + drur[r_] * s;
+                    wphi_lerp = wphi_prev + dwphi * s;
+                    ring_pos = r_lerp * zinv(mul(float3(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_]), 0), rot));
+                    flag = rur[r_] < a;
+                    o.depth = flag ? max(clip2depth(UnityObjectToClipPos(ring_pos)), max_depth) : o.depth;
+                    o.color.w = flag ? 1 : o.color.w;
+                    decided = decided || flag;
 
-                    frag = wphi[phi_] > 2 * PI * MAX_WINDING;
-                    color.w = frag ? 1 : color.w;
-                    decided = decided || frag;
+                    flag = wphi[phi_] > 2 * PI * MAX_WINDING;
+                    o.color.w = flag ? 1 : o.color.w;
+                    decided = decided || flag;
 
                     decided = decided || rur[ur_] / rtg00r0 > ESCAPE_VELOCITY * c;
+                    max_depth = max(clip2depth(UnityObjectToClipPos(rur[r_] * zinv(mul(float3(cos(wphi[phi_]), sin(wphi[phi_]), 0), rot)))), max_depth);
                 }
-                color.w = rur[r_] < 1.5 * a ? 1 : color.w;
-                clip(color.w - 0.5);
-                return color;
+                o.color.w = rur[r_] < 1.5 * a ? 1 : o.color.w;
+                clip(o.color.w - 0.5);
+                return o;
             }
             ENDCG
         }
