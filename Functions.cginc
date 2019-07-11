@@ -100,6 +100,61 @@ float3 f4to3 (float4 v)
     return v.xyz / v.w;
 }
 
+float4x4 f3x3to4x4 (float3x3 m)
+{
+    return float4x4 (
+        m[0].xyz, 0,
+        m[1].xyz, 0,
+        m[2].xyz, 0,
+         0, 0, 0, 1
+    );
+}
+
+#define I2x2 float2x2( \
+    1, 0, \
+    0, 1  \
+)
+
+#define I3x3 float3x3( \
+    1, 0, 0, \
+    0, 1, 0, \
+    0, 0, 1  \
+)
+
+#define I4x4 float4x4( \
+    1, 0, 0, 0, \
+    0, 1, 0, 0, \
+    0, 0, 1, 0, \
+    0, 0, 0, 1  \
+)
+
+float2x2 diag (float2 v)
+{
+    return float2x2(
+        v.x,   0,
+          0, v.y
+    );
+}
+
+float3x3 diag (float3 v)
+{
+    return float3x3(
+        v.x,   0,   0,
+          0, v.y,   0,
+          0,   0, v.z
+    );
+}
+
+float4x4 diag (float4 v)
+{
+    return float4x4(
+        v.x,   0,   0,   0,
+          0, v.y,   0,   0,
+          0,   0, v.z,   0,
+          0,   0,   0, v.w
+    );
+}
+
 float3 zinv (float3 v)
 {
     return float3(v.xy, -v.z);
@@ -110,17 +165,17 @@ float4 zinv (float4 v)
     return float4(v.xy, -v.z, v.w);
 }
 
-#define ZINV_MATRIX float3( \
+#define ZINV_MATRIX float3x3( \
     1,  0,  0, \
     0,  1,  0, \
-    0,  0, -1, \
+    0,  0, -1  \
 )
 
-#define ZINV_MATRIX4 float3( \
+#define ZINV_MATRIX4 float4x4( \
     1,  0,  0,  0, \
     0,  1,  0,  0, \
     0,  0, -1,  0, \
-    0,  0,  0,  1, \
+    0,  0,  0,  1  \
 )
 
 float3x3 rotation_tri (float3 axis, float cos_, float sin_)
