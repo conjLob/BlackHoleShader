@@ -252,4 +252,45 @@ float dither (float2 uv, float alpha)
     return tex3Dlod(_DitherMaskLOD, float4(frac(uv / 4.0), 15.0 / 16.0 * alpha, 0)).a;
 }
 
+float gaussian (float sigma, float x)
+{
+    x /= sigma;
+    return exp(- 0.5 * x * x);
+}
+
+// sigma: (0.5, 0.8333...) if in 3 sigma
+float3 gaussian_filter5 (float sigma)
+{
+    float3 filter;
+    [unroll]
+    for (int i = 0; i < 3; i++) {
+        filter[i] = gaussian(sigma, i);
+    }
+    return filter / ((filter[2] + filter[1]) * 2 + filter[0]);
+}
+
+float3 xblur (sampler2D tex, float3 filter, float2 uv, float texel_size, float threshold=0.0, float supress=0.0)
+{
+    float3 color = 0;
+    float3 tex_color;
+    [unroll]
+    for (int i = -2; i <= 2; i++) {
+        tex_color = tex2D(tex, uv + i * float2(texel_size, 0)).xyz;
+        color += any(tex_color > threshold) ? filter[abs(i)] * saturate(tex_color - supress) : 0;
+    }
+    return color;
+}
+
+float3 yblur (sampler2D tex, float3 filter, float2 uv, float texel_size, float threshold=0.0, float supress=0.0)
+{
+    float3 color = 0;
+    float3 tex_color;
+    [unroll]
+    for (int i = -2; i <= 2; i++) {
+        tex_color = tex2D(tex, uv + i * float2(0, texel_size)).xyz;
+        color += any(tex_color > threshold) ? filter[abs(i)] * saturate(tex_color - supress) : 0;
+    }
+    return color;
+}
+
 #endif

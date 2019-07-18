@@ -12,22 +12,18 @@
         //Cull Off
         LOD 100
 
-        Pass
-        {
-            CGPROGRAM
+        CGINCLUDE
             #pragma vertex vert
-            #pragma fragment frag
 
             #include "UnityCG.cginc"
             #include "Functions.cginc"
 
-            #define a 1.0
-            #define c 1.0
-            #define dtau 0.333
-            #define N 500
-            #define ESCAPE_VELOCITY 0.8
-            #define MAX_WINDING 3
             #define RING_SCALE 8.0
+
+            #define SIGMA 1.25
+            #define TEXEL_SIZE 8.0
+            #define THRESHOLD 0.99
+            #define SUPRESS 0.7
 
             struct appdata
             {
@@ -38,7 +34,34 @@
             {
                 float3 ray_pos : POSITION1;
                 float4 vertex : SV_POSITION;
+                float2 uv : TEXCOORD0;
             };
+
+            vertout vert (appdata v)
+            {
+                vertout o;
+                float3 obj = UNITY_MATRIX_T_MV[3].xyz;
+                o.vertex = float4(obj + RING_SCALE / 5.0 * 1.5 * float3(v.vertex.xz, 0), 1);
+                o.ray_pos = zinv(mul(o.vertex, UNITY_MATRIX_IT_MV).xyz);
+
+                o.vertex = mul(UNITY_MATRIX_P, o.vertex);
+                float4 uv = ComputeGrabScreenPos(o.vertex);
+                o.uv = uv.xy / uv.w;
+                return o;
+            }
+        ENDCG
+
+        Pass
+        {
+            CGPROGRAM
+            #pragma fragment frag
+
+            #define a 1.0
+            #define c 1.0
+            #define dtau 0.333
+            #define N 500
+            #define ESCAPE_VELOCITY 0.8
+            #define MAX_WINDING 3
 
             struct fragin
             {
@@ -53,17 +76,6 @@
             };
 
             sampler2D _RedShiftTex;
-
-            vertout vert (appdata v)
-            {
-                vertout o;
-                float3 obj = UNITY_MATRIX_T_MV[3].xyz;
-                o.vertex = float4(obj + RING_SCALE / 5.0 * 1.5 * float3(v.vertex.xz, 0), 1);
-
-                o.ray_pos = zinv(mul(o.vertex, UNITY_MATRIX_IT_MV).xyz);
-                o.vertex = mul(UNITY_MATRIX_P, o.vertex);
-                return o;
-            }
 
             float g00 (float r)
             {
@@ -259,6 +271,61 @@
                 clip(o.color.w - 0.5);
                 o.depth = max(o.depth, max_depth);
                 return o;
+            }
+            ENDCG
+        }
+
+        Tags { "RenderType"="Transparent" }
+        ZTest Always
+        ZWrite Off
+        LOD 100
+
+        GrabPass {}
+
+        Pass
+        {
+            CGPROGRAM
+            #pragma fragment frag
+
+            struct fragin
+            {
+                float2 uv : TEXCOORD0;
+            };
+
+            sampler2D _GrabTexture;
+            float4 _GrabTexture_TexelSize;
+
+            fixed4 frag (fragin i) : SV_Target
+            {
+                fixed4 color = tex2D(_GrabTexture, i.uv);
+                color.xyz += xblur(_GrabTexture, gaussian_filter5(SIGMA), i.uv, TEXEL_SIZE * _GrabTexture_TexelSize.x, THRESHOLD, SUPRESS);
+                color.w = 1;
+                return color;
+            }
+            ENDCG
+        }
+
+        GrabPass {}
+
+        Pass
+        {
+            CGPROGRAM
+            #pragma fragment frag
+
+            struct fragin
+            {
+                float2 uv : TEXCOORD0;
+            };
+
+            sampler2D _GrabTexture;
+            float4 _GrabTexture_TexelSize;
+
+            fixed4 frag (fragin i) : SV_Target
+            {
+                fixed4 color = tex2D(_GrabTexture, i.uv);
+                color.xyz += yblur(_GrabTexture, gaussian_filter5(SIGMA), i.uv, TEXEL_SIZE * _GrabTexture_TexelSize.y, THRESHOLD, SUPRESS);
+                color.w = 1;
+                return color;
             }
             ENDCG
         }
