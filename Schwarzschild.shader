@@ -7,7 +7,7 @@
     }
     SubShader
     {
-        Tags { "RenderType"="Queue" }
+        Tags { "RenderType"="Opaque" }
         //Blend SrcAlpha OneMinusSrcAlpha
         //Cull Off
         LOD 100
@@ -18,7 +18,7 @@
             #include "UnityCG.cginc"
             #include "Functions.cginc"
 
-            #define RING_SCALE 8.0
+            #define RING_RADIUS 8.0
 
             #define SIGMA 1.25
             #define TEXEL_SIZE 8.0
@@ -41,7 +41,7 @@
             {
                 vertout o;
                 float3 obj = UNITY_MATRIX_T_MV[3].xyz;
-                o.vertex = float4(obj + RING_SCALE / 5.0 * 1.5 * float3(v.vertex.xz, 0), 1);
+                o.vertex = float4(obj + RING_RADIUS / 5.0 * 1.5 * float3(v.vertex.xz, 0), 1);
                 o.ray_pos = zinv(mul(o.vertex, UNITY_MATRIX_IT_MV).xyz);
 
                 o.vertex = mul(UNITY_MATRIX_P, o.vertex);
@@ -256,7 +256,7 @@
 
                     flag =
                         diff_phi * diff_phi_prev < 0 && 3 * a < r_lerp &&
-                        r_lerp < RING_SCALE &&
+                        r_lerp < RING_RADIUS &&
                         color.w;
                     decided = decided || flag;
                     o.color = flag ? color : o.color;
