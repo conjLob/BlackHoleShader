@@ -63,6 +63,8 @@
             #define ESCAPE_VELOCITY 0.8
             #define MAX_WINDING 3
 
+            #define RING_NOISE int2(5, 3)
+
             struct fragin
             {
                 float3 ray_pos : POSITION1;
@@ -258,11 +260,12 @@
                     ring_pos = r_lerp * zinv(mul(float3(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_]), 0), rot));
 
                     color.rgb = tex2Dlod(_RedShiftTex, float4(3 * a / r_lerp, a / r0, 0, 0)).rgb;
-                    color.w = saturate(perlin(float2(3, 2 * PI), int2(5, 3), float2(r_lerp - 3 * a, atan2(ring_pos.x, ring_pos.z) + PI + _Time.z)) * 2 + 0.8);
+                    color.w = saturate(perlin(float2(3, 2 * PI), RING_NOISE, float2(r_lerp - 3 * a, atan2(ring_pos.x, ring_pos.z) + PI + _Time.z)) * 2 + 0.8);
+                    color.w *= smoothstep(3 * a, 3 * a + 0.3, r_lerp) * smoothstep(RING_RADIUS, RING_RADIUS - 0.3, r_lerp);
 
                     flag =
-                        diff_phi * diff_phi_prev < 0 && 3 * a < r_lerp &&
-                        r_lerp < RING_RADIUS;
+                        diff_phi * diff_phi_prev < 0 &&
+                        3 * a < r_lerp && r_lerp < RING_RADIUS;
                     o.color.rgb = flag ? o.color.w * o.color.rgb + (1 - o.color.w) * color.rgb : o.color.rgb;
                     o.color.w = flag ? 1 - (1 - o.color.w) * (1 - color.w) : o.color.w;
                     o.depth = flag ? max(clip2depth(UnityObjectToClipPos(ring_pos)), max_depth) : o.depth;
