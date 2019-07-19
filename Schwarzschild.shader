@@ -7,9 +7,6 @@
     }
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
-        //Blend SrcAlpha OneMinusSrcAlpha
-        //Cull Off
         LOD 100
 
         CGINCLUDE
@@ -22,7 +19,7 @@
 
             #define SIGMA 1.25
             #define TEXEL_SIZE 8.0
-            #define THRESHOLD 0.99
+            #define THRESHOLD 0.8
             #define SUPRESS 0.7
 
             struct appdata
@@ -51,6 +48,9 @@
             }
         ENDCG
 
+        Tags { "RenderType"="Transparent" }
+        Blend SrcAlpha OneMinusSrcAlpha
+
         Pass
         {
             CGPROGRAM
@@ -67,6 +67,7 @@
             {
                 float3 ray_pos : POSITION1;
                 UNITY_VPOS_TYPE vpos : VPOS;
+                float2 uv : TEXCOORD0;
             };
 
             struct fragout
@@ -74,6 +75,9 @@
                 float4 color : SV_Target;
                 float depth : SV_Depth;
             };
+
+            sampler2D _CameraDepthTexture;
+            float4 _CameraDepthTexture_ST;
 
             sampler2D _RedShiftTex;
 
@@ -214,6 +218,7 @@
                 fixed4 color;
                 float max_depth = 0;
                 float prev_depth = 0;
+                float buffer_depth = UNITY_SAMPLE_DEPTH(tex2D(_CameraDepthTexture, i.uv));
 
                 init_integral(c0, omega0, rur, dwphi_prev1);
                 for (int n = 1; n <= N & ! decided; n++) {
@@ -229,9 +234,10 @@
                     wphi += dwphi;
 
                     flag = wphi[phi_] > 2 * PI * MAX_WINDING;
-                    decided = decided || flag;
+                    o.color.rgb = flag ? o.color.w * o.color.rgb : o.color.rgb;
                     o.color.w = flag ? 1 : o.color.w;
                     o.depth = flag ? max_depth : o.depth;
+                    decided = decided || flag;
 
                     decided = decided || rur[ur_] / rtg00r0 > ESCAPE_VELOCITY * c;
 
@@ -239,9 +245,10 @@
                     wphi_lerp[phi_] = wphi_prev[phi_] + dwphi[phi_] * s;
 
                     flag = rur[r_] < a;
-                    decided = decided || flag;
+                    o.color.rgb = flag ? o.color.w * o.color.rgb : o.color.rgb;
                     o.color.w = flag ? 1 : o.color.w;
-                    o.depth = flag ? clip2depth(mul(clip_inv_z_rot, float4(r_lerp * float2(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_])), 0, 1))) : o.depth;
+                    o.depth = flag ? max(clip2depth(mul(clip_inv_z_rot, float4(r_lerp * float2(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_])), 0, 1))), max_depth) : o.depth;
+                    decided = decided || flag;
 
                     diff_phi_prev = fmod(wphi_prev[phi_] + phi_shift, PI) - phi_shift - eyphi;
                     diff_phi = diff_phi_prev + dwphi[phi_];
@@ -252,33 +259,33 @@
 
                     color.rgb = tex2Dlod(_RedShiftTex, float4(3 * a / r_lerp, a / r0, 0, 0)).rgb;
                     color.w = saturate(perlin(float2(3, 2 * PI), int2(5, 3), float2(r_lerp - 3 * a, atan2(ring_pos.x, ring_pos.z) + PI + _Time.z)) * 2 + 0.8);
-                    color.w = dither(i.vpos.xy, color.w);
 
                     flag =
                         diff_phi * diff_phi_prev < 0 && 3 * a < r_lerp &&
-                        r_lerp < RING_RADIUS &&
-                        color.w;
-                    decided = decided || flag;
-                    o.color = flag ? color : o.color;
-                    o.depth = flag ? clip2depth(UnityObjectToClipPos(ring_pos)) : o.depth;
+                        r_lerp < RING_RADIUS;
+                    o.color.rgb = flag ? o.color.w * o.color.rgb + (1 - o.color.w) * color.rgb : o.color.rgb;
+                    o.color.w = flag ? 1 - (1 - o.color.w) * (1 - color.w) : o.color.w;
+                    o.depth = flag ? max(clip2depth(UnityObjectToClipPos(ring_pos)), max_depth) : o.depth;
+                    decided = decided || (flag && o.color.w > 0.99);
 
                     prev_depth = clip2depth(mul(clip_inv_z_rot, float4(rur[r_] * float2(cos(wphi[phi_]), sin(wphi[phi_])), 0, 1)));
+                    decided = decided || prev_depth > buffer_depth;
                 }
                 flag = rur[r_] < 1.5 * a;
+                o.color.rgb = flag ? o.color.w * o.color.rgb : o.color.rgb;
                 o.color.w = flag ? 1 : o.color.w;
                 o.depth = flag ? max_depth : o.depth;
 
-                clip(o.color.w - 0.5);
-                o.depth = max(o.depth, max_depth);
+                clip(o.color.w - 0.01);
                 return o;
             }
             ENDCG
         }
 
         Tags { "RenderType"="Transparent" }
+        Blend SrcAlpha OneMinusSrcAlpha
         ZTest Always
         ZWrite Off
-        LOD 100
 
         GrabPass {}
 
