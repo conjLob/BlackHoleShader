@@ -79,8 +79,6 @@
             };
 
             sampler2D _CameraDepthTexture;
-            float4 _CameraDepthTexture_ST;
-
             sampler2D _RedShiftTex;
 
             float g00 (float r)
