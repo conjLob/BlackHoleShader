@@ -15,6 +15,7 @@
             #include "UnityCG.cginc"
             #include "Functions.cginc"
 
+            #define ATTACHED_TO_QUAD 0
             #define RING_RADIUS 8.0
 
             #define SIGMA 1.25
@@ -31,19 +32,25 @@
             {
                 float3 ray_pos : POSITION1;
                 float4 vertex : SV_POSITION;
-                float2 uv : TEXCOORD0;
+                float4 uv : TEXCOORD0;
             };
 
             vertout vert (appdata v)
             {
                 vertout o;
-                float3 obj = UNITY_MATRIX_T_MV[3].xyz;
-                o.vertex = float4(obj + RING_RADIUS * 3 * v.vertex, 1);
-                o.ray_pos = zinv(mul(o.vertex, UNITY_MATRIX_IT_MV).xyz);
 
-                o.vertex = mul(UNITY_MATRIX_P, o.vertex);
-                float4 uv = ComputeGrabScreenPos(o.vertex);
-                o.uv = uv.xy / uv.w;
+                #if ATTACHED_TO_QUAD
+                    float3 obj = UNITY_MATRIX_T_MV[3].xyz;
+                    o.vertex = float4(obj + RING_RADIUS * 3 * v.vertex, 1);
+                    o.ray_pos = zinv(mul(o.vertex, UNITY_MATRIX_IT_MV).xyz);
+                    o.vertex = mul(UNITY_MATRIX_P, o.vertex);
+                #else
+                    o.vertex = float4(-100 * v.vertex.xyz, 1);
+                    o.ray_pos = zinv(o.vertex.xyz);
+                    o.vertex = UnityObjectToClipPos(o.vertex);
+                #endif
+
+                o.uv = ComputeGrabScreenPos(o.vertex);
                 return o;
             }
         ENDCG
@@ -68,8 +75,7 @@
             struct fragin
             {
                 float3 ray_pos : POSITION1;
-                UNITY_VPOS_TYPE vpos : VPOS;
-                float2 uv : TEXCOORD0;
+                float4 uv : TEXCOORD0;
             };
 
             struct fragout
@@ -218,7 +224,7 @@
                 fixed4 color;
                 float max_depth = 0;
                 float prev_depth = 0;
-                float buffer_depth = UNITY_SAMPLE_DEPTH(tex2D(_CameraDepthTexture, i.uv));
+                float buffer_depth = UNITY_SAMPLE_DEPTH(tex2D(_CameraDepthTexture, f4to3(i.uv).xy));
 
                 init_integral(c0, omega0, rur, dwphi_prev1);
                 for (int n = 1; n <= N & ! decided; n++) {
@@ -298,7 +304,7 @@
 
             struct fragin
             {
-                float2 uv : TEXCOORD0;
+                float4 uv : TEXCOORD0;
             };
 
             sampler2D _GrabTexture;
@@ -306,8 +312,9 @@
 
             fixed4 frag (fragin i) : SV_Target
             {
-                fixed4 color = tex2D(_GrabTexture, i.uv);
-                color.xyz += xblur(_GrabTexture, gaussian_filter5(SIGMA), i.uv, TEXEL_SIZE * _GrabTexture_TexelSize.x, THRESHOLD, SUPRESS);
+                float2 uv = f4to3(i.uv).xy;
+                fixed4 color = tex2D(_GrabTexture, uv);
+                color.xyz += xblur(_GrabTexture, gaussian_filter5(SIGMA), uv, TEXEL_SIZE * _GrabTexture_TexelSize.x, THRESHOLD, SUPRESS);
                 color.w = 1;
                 return color;
             }
@@ -323,7 +330,7 @@
 
             struct fragin
             {
-                float2 uv : TEXCOORD0;
+                float4 uv : TEXCOORD0;
             };
 
             sampler2D _GrabTexture;
@@ -331,8 +338,9 @@
 
             fixed4 frag (fragin i) : SV_Target
             {
-                fixed4 color = tex2D(_GrabTexture, i.uv);
-                color.xyz += yblur(_GrabTexture, gaussian_filter5(SIGMA), i.uv, TEXEL_SIZE * _GrabTexture_TexelSize.y, THRESHOLD, SUPRESS);
+                float2 uv = f4to3(i.uv).xy;
+                fixed4 color = tex2D(_GrabTexture, uv);
+                color.xyz += yblur(_GrabTexture, gaussian_filter5(SIGMA), uv, TEXEL_SIZE * _GrabTexture_TexelSize.y, THRESHOLD, SUPRESS);
                 color.w = 1;
                 return color;
             }
