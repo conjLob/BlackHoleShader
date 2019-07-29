@@ -35,8 +35,8 @@ float3 random3 (float3 array)
 float perlin (float2 size, int2 n, float2 uv)
 {
     uv = frac(uv / size) * n;
-    float2 p00 = floor(uv);
-    float2 p11 = fmod(p00 + 1, n);
+    int2 p00 = floor(uv);
+    int2 p11 = fmod(p00 + 1, n);
     float2 uv_ = smoothstep(0, 1, frac(uv));
     float2 g00 = random2(p00) * 2 - 1;
     float2 g10 = random2(float2(p11.x, p00.y)) * 2 - 1;
@@ -56,8 +56,8 @@ float perlin (float2 size, int2 n, float2 uv)
 float perlin (float3 size, int3 n, float3 pos)
 {
     pos = frac(pos / size) * n;
-    float3 p000 = floor(pos);
-    float3 p111 = fmod(p000 + 1, n);
+    int3 p000 = floor(pos);
+    int3 p111 = fmod(p000 + 1, n);
     float3 pos_ = smoothstep(0, 1, frac(pos));
     float3 g000 = random3(p000) * 2 - 1;
     float3 g100 = random3(float3(p111.x, p000.y, p000.z)) * 2 - 1;
