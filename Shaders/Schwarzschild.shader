@@ -2,6 +2,11 @@
 {
     Properties
     {
+        [HideInInspector] [Toggle(ATTACHED_TO_CUBE)] _AttachedToCube ("Attached To Cube", Float) = 0
+        [Header(Configuration)]
+        _QuadScale ("Quad Scale", Float) = 3.0
+        [HideInInspector] _CubeScale ("Cube Scale", Float) = 100.0
+
         [Header(Spacetime)]
         _c ("Speed Of Light", Float) = 1.0
 
@@ -20,9 +25,6 @@
         [Header(Ring Noise)]
         _RingNoise_r ("N Divisions Of r", Int) = 8
         _RingNoise_phi ("N Divisions Of phi", Int) = 3
-
-        [Header(Stars)]
-        [HideInInspector] [Toggle(DRAW_STARS)] _Draw_Stars ("Draw Stars", Float) = 0
 
         [Header(Bloom)]
         _sigma ("sigma", Float) = 1.25
@@ -55,6 +57,7 @@
                 float4 uv : TEXCOORD0;
             };
 
+            float _QuadScale, _CubeScale;
             float _RingRadius;
 
             float _sigma;
@@ -66,13 +69,13 @@
             {
                 vertout o;
 
-                #if DRAW_STARS
-                    o.vertex = float4(-100 * v.vertex.xyz, 1);
+                #if ATTACHED_TO_CUBE
+                    o.vertex = float4(- _CubeScale * v.vertex.xyz, 1);
                     o.ray_pos = zinv(o.vertex.xyz);
                     o.vertex = UnityObjectToClipPos(o.vertex);
                 #else
                     float3 obj = UNITY_MATRIX_T_MV[3].xyz;
-                    o.vertex = float4(obj + _RingRadius * 3 * v.vertex, 1);
+                    o.vertex = float4(obj + _QuadScale * _RingRadius * v.vertex, 1);
                     o.ray_pos = zinv(mul(o.vertex, UNITY_MATRIX_IT_MV).xyz);
                     o.vertex = mul(UNITY_MATRIX_P, o.vertex);
                 #endif
@@ -108,6 +111,7 @@
             float _dtau;
             float _EscapeVelocity;
             float _MaxWinding;
+
             sampler2D _RedShiftTex;
             int _RingNoise_r, _RingNoise_phi;
 
