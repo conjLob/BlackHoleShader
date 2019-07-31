@@ -2,9 +2,35 @@
 {
     Properties
     {
-        [NoScaleOffset]
-        _RedShiftTex ("Red Shift Texture", 2D) = "white" {}
+        [Header(Spacetime)]
+        _c ("Speed Of Light", Float) = 1.0
+
+        [Header(Blackhole)]
+        _a ("Schwarzschild Radius", Float) = 1.0
+
+        [Header(Calculation Parameters)]
+        _N ("N Steps", Int) = 500
+        _dtau ("Step Size", Float) = 0.333
+        _EscapeVelocity ("Escape Velocity", Range(0, 1)) = 0.8
+        _MaxWinding ("Max Winding Of Light", Float) = 3.0
+
+        [Header(Ring)]
+        _RingRadius ("Ring Radius", Float) = 8.0
+        [NoScaleOffset] _RedShiftTex ("Red Shift Texture", 2D) = "white" {}
+        [Header(Ring Noise)]
+        _RingNoise_r ("N Divisions Of r", Int) = 8
+        _RingNoise_phi ("N Divisions Of phi", Int) = 3
+
+        [Header(Stars)]
+        [HideInInspector] [Toggle(DRAW_STARS)] _Draw_Stars ("Draw Stars", Float) = 0
+
+        [Header(Bloom)]
+        _sigma ("sigma", Float) = 1.25
+        _StepWidth ("Step Width", Float) = 8.0
+        _Threshold ("Threshold", Float) = 0.8
+        _Suppression ("Suppression", Float) = 0.7
     }
+
     SubShader
     {
         LOD 100
@@ -12,16 +38,10 @@
         CGINCLUDE
             #pragma vertex vert
 
+            #pragma shader_feature DRAW_STARS
+
             #include "UnityCG.cginc"
             #include "Functions.cginc"
-
-            #define ATTACHED_TO_QUAD 0
-            #define RING_RADIUS 8.0
-
-            #define SIGMA 1.25
-            #define TEXEL_SIZE 8.0
-            #define THRESHOLD 0.8
-            #define SUPRESS 0.7
 
             struct appdata
             {
@@ -35,19 +55,26 @@
                 float4 uv : TEXCOORD0;
             };
 
+            float _RingRadius;
+
+            float _sigma;
+            float _StepWidth;
+            float _Threshold;
+            float _Suppression;
+
             vertout vert (appdata v)
             {
                 vertout o;
 
-                #if ATTACHED_TO_QUAD
-                    float3 obj = UNITY_MATRIX_T_MV[3].xyz;
-                    o.vertex = float4(obj + RING_RADIUS * 3 * v.vertex, 1);
-                    o.ray_pos = zinv(mul(o.vertex, UNITY_MATRIX_IT_MV).xyz);
-                    o.vertex = mul(UNITY_MATRIX_P, o.vertex);
-                #else
+                #if DRAW_STARS
                     o.vertex = float4(-100 * v.vertex.xyz, 1);
                     o.ray_pos = zinv(o.vertex.xyz);
                     o.vertex = UnityObjectToClipPos(o.vertex);
+                #else
+                    float3 obj = UNITY_MATRIX_T_MV[3].xyz;
+                    o.vertex = float4(obj + _RingRadius * 3 * v.vertex, 1);
+                    o.ray_pos = zinv(mul(o.vertex, UNITY_MATRIX_IT_MV).xyz);
+                    o.vertex = mul(UNITY_MATRIX_P, o.vertex);
                 #endif
 
                 o.uv = ComputeGrabScreenPos(o.vertex);
@@ -63,15 +90,6 @@
             CGPROGRAM
             #pragma fragment frag
 
-            #define a 1.0
-            #define c 1.0
-            #define dtau 0.333
-            #define N 500
-            #define ESCAPE_VELOCITY 0.8
-            #define MAX_WINDING 3
-
-            #define RING_NOISE int2(5, 3)
-
             struct fragin
             {
                 float3 ray_pos : POSITION1;
@@ -84,12 +102,20 @@
                 float depth : SV_Depth;
             };
 
-            sampler2D _CameraDepthTexture;
+            float _c;
+            float _a;
+            int _N;
+            float _dtau;
+            float _EscapeVelocity;
+            float _MaxWinding;
             sampler2D _RedShiftTex;
+            int _RingNoise_r, _RingNoise_phi;
+
+            sampler2D _CameraDepthTexture;
 
             float g00 (float r)
             {
-                return 1 - a / r;
+                return 1 - _a / r;
             }
 
             float delw (float c0, float r)
@@ -99,7 +125,7 @@
 
             float del2r (float c0, float omega0, float r)
             {
-                return (r - 1.5 * a) * pow(omega0 / (r * r), 2);
+                return (r - 1.5 * _a) * pow(omega0 / (r * r), 2);
             }
 
             float delphi (float omega0, float r)
@@ -133,7 +159,7 @@
                 float2 er_obs = obs / r0;
                 float2 ephi_obs = float2(-er_obs.y, er_obs.x);
 
-                float u0w = c / rtg00r0;
+                float u0w = _c / rtg00r0;
                 u0r = rtg00r0 * dot(u0_obs, er_obs);
                 float u0phi = dot(u0_obs, ephi_obs) / r0;
 
@@ -150,16 +176,16 @@
 
             r_ur euler (float c0, float omega0, r_ur rur)
             {
-                return dtau * r_ur(rur[ur_], del2r(c0, omega0, rur[r_]));
+                return _dtau * r_ur(rur[ur_], del2r(c0, omega0, rur[r_]));
             }
 
             r_ur runge_kutta (float c0, float omega0, r_ur rur)
             {
-                float half_dtau = 0.5 * dtau;
+                float half_dtau = 0.5 * _dtau;
 
                 r_ur k1 = half_dtau * r_ur(rur[ur_],           del2r(c0, omega0, rur[r_]));
                 r_ur k2 = half_dtau * r_ur(rur[ur_] + k1[ur_], del2r(c0, omega0, rur[r_] + k1[r_]));
-                r_ur k3 =      dtau * r_ur(rur[ur_] + k2[ur_], del2r(c0, omega0, rur[r_] + k2[r_]));
+                r_ur k3 =     _dtau * r_ur(rur[ur_] + k2[ur_], del2r(c0, omega0, rur[r_] + k2[r_]));
                 r_ur k4 = half_dtau * r_ur(rur[ur_] + k3[ur_], del2r(c0, omega0, rur[r_] + k3[r_]));
 
                 return (1.0 / 3.0) * (k1 + 2*k2 + k3 + k4);
@@ -167,12 +193,12 @@
 
             void init_integral (float c0, float omega0, r_ur rur, out w_phi prev)
             {
-                prev = dtau * w_phi(delw(c0, rur[r_]), delphi(omega0, rur[r_]));
+                prev = _dtau * w_phi(delw(c0, rur[r_]), delphi(omega0, rur[r_]));
             }
 
             w_phi trapezoid (float c0, float omega0, r_ur rur, w_phi wphi, inout w_phi prev)
             {
-                w_phi now = dtau * w_phi(delw(c0, rur[r_]), delphi(omega0, rur[r_]));
+                w_phi now = _dtau * w_phi(delw(c0, rur[r_]), delphi(omega0, rur[r_]));
                 w_phi ret = 0.5 * (prev + now);
                 prev = now;
                 return ret;
@@ -180,7 +206,7 @@
 
             w_phi simpson (int n, float c0, float omega0, r_ur rur, w_phi wphi, inout w_phi prev1, inout w_phi prev2)
             {
-                w_phi now = dtau * w_phi(delw(c0, rur[r_]), delphi(omega0, rur[r_]));
+                w_phi now = _dtau * w_phi(delw(c0, rur[r_]), delphi(omega0, rur[r_]));
                 w_phi ret = fmod(n, 2) ? 0.5 * (prev1 + now) : (1.0 / 3.0) * (- 0.5 * prev2 + 2.5 * prev1 + now);
                 prev2 = prev1;
                 prev1 = now;
@@ -194,7 +220,7 @@
                 o.depth = 1;
 
                 float3 obs3 = zinv(mul(unity_WorldToObject, _WorldSpaceCameraPos));
-                float3 u03_obs = c * normalize(i.ray_pos - obs3);
+                float3 u03_obs = _c * normalize(i.ray_pos - obs3);
 
                 float3x3 rot = calc_rotation(obs3, u03_obs);
                 float2 obs = mul(rot, obs3).xy;
@@ -227,7 +253,7 @@
                 float buffer_depth = UNITY_SAMPLE_DEPTH(tex2D(_CameraDepthTexture, f4to3(i.uv).xy));
 
                 init_integral(c0, omega0, rur, dwphi_prev1);
-                for (int n = 1; n <= N & ! decided; n++) {
+                for (int n = 1; n <= _N & ! decided; n++) {
                     max_depth = max(prev_depth, max_depth);
                     r_prev = rur[r_];
                     wphi_prev = wphi;
@@ -239,20 +265,20 @@
                     dwphi = simpson(n, c0, omega0, rur, wphi, dwphi_prev1, dwphi_prev2);
                     wphi += dwphi;
 
-                    flag = wphi[phi_] > 2 * PI * MAX_WINDING;
-                    o.color.rgb = flag ? o.color.w * o.color.rgb : o.color.rgb;
-                    o.color.w = flag ? 1 : o.color.w;
+                    flag = wphi[phi_] > 2 * PI * _MaxWinding;
+                    o.color.rgb = flag ? o.color.a * o.color.rgb : o.color.rgb;
+                    o.color.a = flag ? 1 : o.color.a;
                     o.depth = flag ? max_depth : o.depth;
                     decided = decided || flag;
 
-                    decided = decided || rur[ur_] / rtg00r0 > ESCAPE_VELOCITY * c;
+                    decided = decided || rur[ur_] / rtg00r0 > _EscapeVelocity * _c;
 
-                    s = (a - r_prev) / drur[r_];
+                    s = (_a - r_prev) / drur[r_];
                     wphi_lerp[phi_] = wphi_prev[phi_] + dwphi[phi_] * s;
 
-                    flag = rur[r_] < a;
-                    o.color.rgb = flag ? o.color.w * o.color.rgb : o.color.rgb;
-                    o.color.w = flag ? 1 : o.color.w;
+                    flag = rur[r_] < _a;
+                    o.color.rgb = flag ? o.color.a * o.color.rgb : o.color.rgb;
+                    o.color.a = flag ? 1 : o.color.a;
                     o.depth = flag ? max(clip2depth(mul(clip_inv_z_rot, float4(r_lerp * float2(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_])), 0, 1))), max_depth) : o.depth;
                     decided = decided || flag;
 
@@ -265,26 +291,26 @@
 
                     flag =
                         diff_phi * diff_phi_prev < 0 &&
-                        3 * a < r_lerp && r_lerp < RING_RADIUS;
+                        3 * _a < r_lerp && r_lerp < _RingRadius;
 
-                    color.rgb = tex2Dlod(_RedShiftTex, float4(3 * a / r_lerp, a / r0, 0, 0)).rgb;
-                    color.w = saturate(perlin(float2(3, 2 * PI), RING_NOISE, float2(r_lerp - 3 * a, atan2(ring_pos.x, ring_pos.z) + PI + _Time.z)) * 2 + 0.8);
-                    color.w *= smoothstep(3 * a, 3 * a + 0.3, r_lerp) * smoothstep(RING_RADIUS, RING_RADIUS - 0.3, r_lerp);
+                    color.rgb = tex2Dlod(_RedShiftTex, float4(3 * _a / r_lerp, _a / r0, 0, 0)).rgb;
+                    color.a = saturate(perlin(float2(_RingRadius - 3 * _a, 2 * PI), int2(_RingNoise_r, _RingNoise_phi), float2(r_lerp - 3 * _a, atan2(ring_pos.x, ring_pos.z) + PI + _Time.z)) * 2 + 0.8);
+                    color.a *= smoothstep(3 * _a, 3 * _a + 0.3, r_lerp) * smoothstep(_RingRadius, _RingRadius - 0.3, r_lerp);
 
-                    o.color.rgb = flag ? o.color.w * o.color.rgb + (1 - o.color.w) * color.rgb : o.color.rgb;
-                    o.color.w = flag ? 1 - (1 - o.color.w) * (1 - color.w) : o.color.w;
+                    o.color.rgb = flag ? o.color.a * o.color.rgb + (1 - o.color.a) * color.rgb : o.color.rgb;
+                    o.color.a = flag ? 1 - (1 - o.color.a) * (1 - color.a) : o.color.a;
                     o.depth = flag ? max(clip2depth(UnityObjectToClipPos(ring_pos)), max_depth) : o.depth;
-                    decided = decided || (flag && o.color.w > 0.99);
+                    decided = decided || (flag && o.color.a > 0.99);
 
                     prev_depth = clip2depth(mul(clip_inv_z_rot, float4(rur[r_] * float2(cos(wphi[phi_]), sin(wphi[phi_])), 0, 1)));
                     decided = decided || prev_depth > buffer_depth;
                 }
-                flag = rur[r_] < 1.5 * a;
-                o.color.rgb = flag ? o.color.w * o.color.rgb : o.color.rgb;
-                o.color.w = flag ? 1 : o.color.w;
+                flag = rur[r_] < 1.5 * _a;
+                o.color.rgb = flag ? o.color.a * o.color.rgb : o.color.rgb;
+                o.color.a = flag ? 1 : o.color.a;
                 o.depth = flag ? max_depth : o.depth;
 
-                clip(o.color.w - 0.01);
+                clip(o.color.a - 0.01);
                 return o;
             }
             ENDCG
@@ -314,8 +340,8 @@
             {
                 float2 uv = f4to3(i.uv).xy;
                 fixed4 color = tex2D(_GrabTexture, uv);
-                color.xyz += xblur(_GrabTexture, gaussian_filter5(SIGMA), uv, TEXEL_SIZE * _GrabTexture_TexelSize.x, THRESHOLD, SUPRESS);
-                color.w = 1;
+                color.xyz += xblur(_GrabTexture, gaussian_filter5(_sigma), uv, _StepWidth * _GrabTexture_TexelSize.x, _Threshold, _Suppression);
+                color.a = 1;
                 return color;
             }
             ENDCG
@@ -340,8 +366,8 @@
             {
                 float2 uv = f4to3(i.uv).xy;
                 fixed4 color = tex2D(_GrabTexture, uv);
-                color.xyz += yblur(_GrabTexture, gaussian_filter5(SIGMA), uv, TEXEL_SIZE * _GrabTexture_TexelSize.y, THRESHOLD, SUPRESS);
-                color.w = 1;
+                color.xyz += yblur(_GrabTexture, gaussian_filter5(_sigma), uv, _StepWidth * _GrabTexture_TexelSize.y, _Threshold, _Suppression);
+                color.a = 1;
                 return color;
             }
             ENDCG
