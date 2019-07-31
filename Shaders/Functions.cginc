@@ -3,6 +3,22 @@
 
 #define PI 3.14159265359
 
+float square (float l, float r, float x)
+{
+    return step(l, x) * step(x, r);
+}
+
+#define DEF_MOD(type) \
+    float mod (type x, type y)       \
+    {                                \
+        return x - y * floor(x / y); \
+    }
+
+DEF_MOD(float)
+DEF_MOD(float2)
+DEF_MOD(float3)
+DEF_MOD(float4)
+
 #define RANDOM_SEED_0 38.4382
 #define RANDOM_SEED_1 43758.5453
 #define RANDOM_SEED_2 8.4678
@@ -37,19 +53,20 @@ float perlin (float2 size, int2 n, float2 uv)
     uv = frac(uv / size) * n;
     int2 p00 = floor(uv);
     int2 p11 = fmod(p00 + 1, n);
-    float2 uv_ = smoothstep(0, 1, frac(uv));
+    uv = frac(uv);
     float2 g00 = random2(p00) * 2 - 1;
     float2 g10 = random2(float2(p11.x, p00.y)) * 2 - 1;
     float2 g01 = random2(float2(p00.x, p11.y)) * 2 - 1;
     float2 g11 = random2(p11) * 2 - 1;
-    float2 v00 = uv_;
-    float2 v10 = uv_ - float2(1, 0);
-    float2 v01 = uv_ - float2(0, 1);
-    float2 v11 = uv_ - float2(1, 1);
+    float2 v00 = uv;
+    float2 v10 = uv - float2(1, 0);
+    float2 v01 = uv - float2(0, 1);
+    float2 v11 = uv - 1;
+    float2 fade = smoothstep(0, 1, uv);
     return lerp(
-        lerp(dot(g00, v00), dot(g10, v10), uv_.x),
-        lerp(dot(g01, v01), dot(g11, v11), uv_.x),
-        uv_.y
+        lerp(dot(g00, v00), dot(g10, v10), fade.x),
+        lerp(dot(g01, v01), dot(g11, v11), fade.x),
+        fade.y
     );
 }
 
@@ -58,7 +75,7 @@ float perlin (float3 size, int3 n, float3 pos)
     pos = frac(pos / size) * n;
     int3 p000 = floor(pos);
     int3 p111 = fmod(p000 + 1, n);
-    float3 pos_ = smoothstep(0, 1, frac(pos));
+    pos = frac(pos);
     float3 g000 = random3(p000) * 2 - 1;
     float3 g100 = random3(float3(p111.x, p000.y, p000.z)) * 2 - 1;
     float3 g010 = random3(float3(p000.x, p111.y, p000.z)) * 2 - 1;
@@ -67,32 +84,28 @@ float perlin (float3 size, int3 n, float3 pos)
     float3 g101 = random3(float3(p111.x, p000.y, p111.z)) * 2 - 1;
     float3 g110 = random3(float3(p111.x, p111.y, p000.z)) * 2 - 1;
     float3 g111 = random3(p111) * 2 - 1;
-    float3 v000 = pos_;
-    float3 v100 = pos_ - float3(1, 0, 0);
-    float3 v010 = pos_ - float3(0, 1, 0);
-    float3 v001 = pos_ - float3(0, 0, 1);
-    float3 v011 = pos_ - float3(0, 1, 1);
-    float3 v101 = pos_ - float3(1, 0, 1);
-    float3 v110 = pos_ - float3(0, 1, 1);
-    float3 v111 = pos_ - float3(1, 1, 1);
+    float3 v000 = pos;
+    float3 v100 = pos - float3(1, 0, 0);
+    float3 v010 = pos - float3(0, 1, 0);
+    float3 v001 = pos - float3(0, 0, 1);
+    float3 v011 = pos - float3(0, 1, 1);
+    float3 v101 = pos - float3(1, 0, 1);
+    float3 v110 = pos - float3(0, 1, 1);
+    float3 v111 = pos - 1;
+    float3 fade = smoothstep(0, 1, pos);
     return lerp(
         lerp(
-            lerp(dot(g000, v000), dot(g100, v100), pos_.x),
-            lerp(dot(g010, v010), dot(g110, v110), pos_.x),
-            pos_.y
+            lerp(dot(g000, v000), dot(g100, v100), fade.x),
+            lerp(dot(g010, v010), dot(g110, v110), fade.x),
+            fade.y
         ),
         lerp(
-            lerp(dot(g001, v001), dot(g101, v101), pos_.x),
-            lerp(dot(g011, v011), dot(g111, v111), pos_.x),
-            pos_.y
+            lerp(dot(g001, v001), dot(g101, v101), fade.x),
+            lerp(dot(g011, v011), dot(g111, v111), fade.x),
+            fade.y
         ),
-        pos_.z
+        fade.z
     );
-}
-
-float square (float l, float r, float x)
-{
-    return step(l, x) * step(x, r);
 }
 
 float3 f4to3 (float4 v)
