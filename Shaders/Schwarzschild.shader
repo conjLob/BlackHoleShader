@@ -1,4 +1,4 @@
-﻿Shader "Unlit/Schwarzschild"
+﻿Shader "Blackhole/Schwarzschild"
 {
     Properties
     {
@@ -50,7 +50,7 @@
                 float4 vertex : POSITION;
             };
 
-            struct vertout
+            struct v2f
             {
                 float3 ray_pos : POSITION1;
                 float4 vertex : SV_POSITION;
@@ -65,9 +65,9 @@
             float _Threshold;
             float _Suppression;
 
-            vertout vert (appdata v)
+            v2f vert (appdata v)
             {
-                vertout o;
+                v2f o;
 
                 #if ATTACHED_TO_CUBE
                     o.vertex = float4(- _CubeScale * v.vertex.xyz, 1);
@@ -75,7 +75,7 @@
                     o.vertex = UnityObjectToClipPos(o.vertex);
                 #else
                     float3 obj = UNITY_MATRIX_T_MV[3].xyz;
-                    o.vertex = float4(obj + _QuadScale * _RingRadius * v.vertex, 1);
+                    o.vertex = float4(obj + _QuadScale * _RingRadius * v.vertex.xyz, 1);
                     o.ray_pos = zinv(mul(o.vertex, UNITY_MATRIX_IT_MV).xyz);
                     o.vertex = mul(UNITY_MATRIX_P, o.vertex);
                 #endif
@@ -92,12 +92,6 @@
         {
             CGPROGRAM
             #pragma fragment frag
-
-            struct fragin
-            {
-                float3 ray_pos : POSITION1;
-                float4 uv : TEXCOORD0;
-            };
 
             struct fragout
             {
@@ -217,7 +211,7 @@
                 return ret;
             }
 
-            fragout frag (fragin i)
+            fragout frag (v2f i)
             {
                 fragout o;
                 o.color = 0;
@@ -254,7 +248,7 @@
                 fixed4 color;
                 float max_depth = 0;
                 float prev_depth = 0;
-                float buffer_depth = UNITY_SAMPLE_DEPTH(tex2D(_CameraDepthTexture, f4to3(i.uv).xy));
+                float buffer_depth = sample_depth01(_CameraDepthTexture, f4to3(i.uv).xy);
 
                 init_integral(c0, omega0, rur, dwphi_prev1);
                 for (int n = 1; n <= _N & ! decided; n++) {
@@ -283,7 +277,7 @@
                     flag = rur[r_] < _a;
                     o.color.rgb = flag ? o.color.a * o.color.rgb : o.color.rgb;
                     o.color.a = flag ? 1 : o.color.a;
-                    o.depth = flag ? max(clip2depth(mul(clip_inv_z_rot, float4(r_lerp * float2(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_])), 0, 1))), max_depth) : o.depth;
+                    o.depth = flag ? max(clip2depth01(mul(clip_inv_z_rot, float4(_a * float2(cos(wphi_lerp[phi_]), sin(wphi_lerp[phi_])), 0, 1))), max_depth) : o.depth;
                     decided = decided || flag;
 
                     diff_phi_prev = fmod(wphi_prev[phi_] + phi_shift, PI) - phi_shift - eyphi;
@@ -303,10 +297,10 @@
 
                     o.color.rgb = flag ? o.color.a * o.color.rgb + (1 - o.color.a) * color.rgb : o.color.rgb;
                     o.color.a = flag ? 1 - (1 - o.color.a) * (1 - color.a) : o.color.a;
-                    o.depth = flag ? max(clip2depth(UnityObjectToClipPos(ring_pos)), max_depth) : o.depth;
+                    o.depth = flag ? max(clip2depth01(UnityObjectToClipPos(ring_pos)), max_depth) : o.depth;
                     decided = decided || (flag && o.color.a > 0.99);
 
-                    prev_depth = clip2depth(mul(clip_inv_z_rot, float4(rur[r_] * float2(cos(wphi[phi_]), sin(wphi[phi_])), 0, 1)));
+                    prev_depth = clip2depth01(mul(clip_inv_z_rot, float4(rur[r_] * float2(cos(wphi[phi_]), sin(wphi[phi_])), 0, 1)));
                     decided = decided || prev_depth > buffer_depth;
                 }
                 flag = rur[r_] < 1.5 * _a;
@@ -315,6 +309,7 @@
                 o.depth = flag ? max_depth : o.depth;
 
                 clip(o.color.a - 0.01);
+                o.depth = reverse_depth_if_needed(o.depth);
                 return o;
             }
             ENDCG
@@ -332,15 +327,10 @@
             CGPROGRAM
             #pragma fragment frag
 
-            struct fragin
-            {
-                float4 uv : TEXCOORD0;
-            };
-
             sampler2D _GrabTexture;
             float4 _GrabTexture_TexelSize;
 
-            fixed4 frag (fragin i) : SV_Target
+            fixed4 frag (v2f i) : SV_Target
             {
                 float2 uv = f4to3(i.uv).xy;
                 fixed4 color = tex2D(_GrabTexture, uv);
@@ -358,15 +348,10 @@
             CGPROGRAM
             #pragma fragment frag
 
-            struct fragin
-            {
-                float4 uv : TEXCOORD0;
-            };
-
             sampler2D _GrabTexture;
             float4 _GrabTexture_TexelSize;
 
-            fixed4 frag (fragin i) : SV_Target
+            fixed4 frag (v2f i) : SV_Target
             {
                 float2 uv = f4to3(i.uv).xy;
                 fixed4 color = tex2D(_GrabTexture, uv);

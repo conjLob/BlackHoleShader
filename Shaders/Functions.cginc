@@ -249,13 +249,27 @@ float4x4 rotation4 (float3 theta)
     return rotation4_tri(theta / angle, cos(angle), sin(angle));
 }
 
-float clip2depth (float4 clip_pos)
+float reverse_depth_if_needed (float depth)
+{
+    #ifdef UNITY_REVERSED_Z
+        return 1 - depth;
+    #else
+        return depth;
+    #endif
+}
+
+float clip2depth01 (float4 clip_pos)
 {
     #if UNITY_UV_STARTS_AT_TOP
-        return clip_pos.z / clip_pos.w;
+        return reverse_depth_if_needed(clip_pos.z / clip_pos.w);
     #else
         return clip_pos.z / clip_pos.w * 0.5 + 0.5;
     #endif
+}
+
+float sample_depth01 (sampler2D depth_tex, float2 uv)
+{
+    return reverse_depth_if_needed(UNITY_SAMPLE_DEPTH(tex2D(depth_tex, uv)));
 }
 
 sampler3D _DitherMaskLOD;
