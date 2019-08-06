@@ -1,4 +1,4 @@
-﻿Shader "Blackhole/Schwarzschild"
+﻿Shader "BlackHole/Schwarzschild"
 {
     Properties
     {
@@ -10,7 +10,7 @@
         [Header(Spacetime)]
         _c ("Speed Of Light", Float) = 1.0
 
-        [Header(Blackhole)]
+        [Header(Black Hole)]
         _a ("Schwarzschild Radius", Float) = 1.0
 
         [Header(Calculation Parameters)]
@@ -21,7 +21,7 @@
 
         [Header(Ring)]
         _RingRadius ("Ring Radius", Float) = 8.0
-        [NoScaleOffset] _RedShiftTex ("Red Shift Texture", 2D) = "white" {}
+        [NoScaleOffset] _RedshiftTex ("Redshift Texture", 2D) = "white" {}
         [Header(Ring Noise)]
         _RingNoise_r ("N Divisions Of r", Int) = 8
         _RingNoise_phi ("N Divisions Of phi", Int) = 3
@@ -106,7 +106,7 @@
             float _EscapeVelocity;
             float _MaxWinding;
 
-            sampler2D _RedShiftTex;
+            sampler2D _RedshiftTex;
             int _RingNoise_r, _RingNoise_phi;
 
             sampler2D _CameraDepthTexture;
@@ -291,7 +291,7 @@
                         diff_phi * diff_phi_prev < 0 &&
                         3 * _a < r_lerp && r_lerp < _RingRadius;
 
-                    color.rgb = tex2Dlod(_RedShiftTex, float4(3 * _a / r_lerp, _a / r0, 0, 0)).rgb;
+                    color.rgb = tex2Dlod(_RedshiftTex, float4(3 * _a / r_lerp, _a / r0, 0, 0)).rgb;
                     color.a = saturate(perlin(float2(_RingRadius - 3 * _a, 2 * PI), int2(_RingNoise_r, _RingNoise_phi), float2(r_lerp - 3 * _a, atan2(ring_pos.x, ring_pos.z) + PI + _Time.z)) * 2 + 0.8);
                     color.a *= smoothstep(3 * _a, 3 * _a + 0.3, r_lerp) * smoothstep(_RingRadius, _RingRadius - 0.3, r_lerp);
 
