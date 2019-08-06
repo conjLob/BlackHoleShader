@@ -23,7 +23,7 @@ The shader also condsidered the gravity reshift effect which is in theory caused
 | Ring Radius | Outer radius of accretion disc. |
 | Redshift Texture | Lookup texture to represent gravity redshift. |
 | N Divisions Of r | Number of divisions of disk noise in the r direction. |
-| N Divisions Of phi | Number of divisions of disk noise in the phi direction. |
+| N Divisions Of phi | Number of divisions of disk noise in the phi direction. |
 | sigma | Variance of Gaussian blur. |
 | Step Width | Sampling step width of Gaussian blur. |
 | Threshold | Threshold of bloom. |
