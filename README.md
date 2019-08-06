@@ -3,7 +3,9 @@
 This is a black hole shader for Unity. Because it is performed by ray tracing, it conforms to the actual appearance of the black hole. 
 The shader also condsidered the gravity reshift effect which is in theory caused by the differences of gravitational force between the observer and the light source.
 
-![Screenshot](./screenshot.png)
+<p align="center">
+  <img width="800px" src="./screenshot.png">
+</p>
 
 ## Usage
 1. Put this repository in a directory of your choice within Unity project.
